@@ -1,0 +1,43 @@
+﻿services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте в .env}
+      POSTGRES_DB: restaurant
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d restaurant"]
+      interval: 3s
+      retries: 20
+    ports: ["127.0.0.1:5432:5432"]
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: restaurant_ai_qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/restaurant
+      SESSION_HOURS: ${SESSION_HOURS:-12}
+      AUTH_RATE_MAX: ${AUTH_RATE_MAX:-10}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:1.7b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-300}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    ports: ["127.0.0.1:8000:8000"]
+
+volumes:
+  pgdata:
+  qdrant_data:
